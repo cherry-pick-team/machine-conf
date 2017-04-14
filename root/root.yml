@@ -1,0 +1,71 @@
+---
+- hosts: all
+  tasks:
+    - name: set locales en
+      locale_gen: name=en_US.UTF-8 state=present
+
+    - name: set locales ru
+      locale_gen: name=ru_RU.UTF-8 state=present
+
+    - name: reconfigure locales & time
+      command: dpkg-reconfigure --frontend noninteractive tzdata locales
+
+    - name: install packages
+      apt: name={{ item }} state=present
+      with_items:
+        - zsh
+        - vim
+        - ctags
+        - python-pycurl
+        - curl
+
+    - name: crete group team
+      group: name=team state=present
+
+    - name: create user nikita
+      user: name=nikita comment="Nikita Slimov" groups=team append=yes shell=/bin/zsh createhome=yes
+
+    - name: create user valry
+      user: name=valry comment="Valery Pershenkova" groups=team append=yes shell=/bin/bash createhome=yes
+
+    - name: create user alex
+      user: name=alex comment="Alexander Schadko" groups=team append=yes shell=/bin/bash createhome=yes
+
+    - name: add ssh key for nikita
+      authorized_key: user=nikita key="{{ lookup('file', 'templates/ssh-keys/nikita.keys') }}"
+
+    - name: add ssh key for valry
+      authorized_key: user=valry key="{{ lookup('file', 'templates/ssh-keys/valry.keys') }}"
+
+    - name: add ssh key for alex
+      authorized_key: user=alex key="{{ lookup('file', 'templates/ssh-keys/alex.keys') }}"
+
+    - name: create user team
+      user: name=team comment="team account" groups=team append=yes shell=/bin/false createhome=yes
+
+    - name: Create sudoers.d directory
+      file:
+        path: /etc/sudoers.d
+        owner: root
+        group: root
+        mode: 0755
+        state: directory
+
+    - name: Set includedir in sudoers
+      lineinfile:
+        dest: /etc/sudoers
+        line: "#includedir /etc/sudoers.d"
+        state: present
+        validate: "/usr/sbin/visudo -cf %s"
+
+    - name: Create sudoers
+      template:
+        src: "templates/sudoers.d.j2"
+        dest: "/etc/sudoers.d/team"
+        mode: 0440
+        owner: root
+        group: root
+        validate: "/usr/sbin/visudo -cf %s"
+
+    - name: normalize rights to team home
+      file: path=/home/team owner=team group=team mode="u+rwX,g+rwX" recurse=yes
